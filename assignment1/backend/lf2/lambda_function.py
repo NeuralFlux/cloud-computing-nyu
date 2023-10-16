@@ -5,10 +5,27 @@ from opensearchpy import OpenSearch
 from boto3.dynamodb.conditions import Key, Attr
 
 import random
+from datetime import datetime
 
 HOST = "https://search-restaurants-72sydqupvni7hi2nca44i6qbz4.us-east-1.es.amazonaws.com"
 AUTH = ('auth9223', 'Auth9223#')
 NUM_RECS = 3
+
+def compose_email(suggestions, user_attr):
+    location = user_attr["Location"]["StringValue"]
+    num_guests = user_attr["NumberOfPeople"]["StringValue"]
+    timing = datetime.strptime(user_attr["Time"]["StringValue"], "%H:%M")
+    timing = datetime.strftime(timing, "%-I%p").lower()
+
+    message = f"""Hello!\nHere are my top suggestions for restaurants in {location} for a party of {num_guests} at {timing}:\n\n"""
+
+    for idx, suggestion in enumerate(suggestions):
+        address = suggestion['address']['display_address'][0]
+        message += f"{idx + 1}. {suggestion['name']}, located at {address}\n"
+    
+    message += "\nI hope you enjoy your outing!"
+    
+    return message
 
 
 def lambda_handler(event, context):
@@ -57,7 +74,27 @@ def lambda_handler(event, context):
             )
         
         print(suggestions)
+        email_body = compose_email(suggestions, msg.message_attributes)
         
+        ses_resp = ses_client.send_email(
+            Destination={
+                'ToAddresses': [msg.message_attributes["Email"]["StringValue"]]
+            },
+            Message={
+                'Subject': {
+                    'Data': 'Your dining recommendations from Lex'
+                },
+                'Body': {
+                    'Text': {
+                        'Data': email_body
+                    }
+                }
+            },
+            Source="anudeep.tubati@nyu.edu"
+        )
+        print(f"SES: {ses_resp}")
+        
+        msg.delete()
     
     return {
         'statusCode': 200,
