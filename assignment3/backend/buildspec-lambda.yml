@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  build:
+    commands:
+      - echo "Zipping deployment package LF1..."
+      - cd assignment3/backend/lambda-index-photos
+      - zip deployment_package.zip lambda_function.py
+      - cd ..
+  post_build:
+    commands:
+      - echo "Updating LF1..."
+      - cd lambda-index-photos
+      - aws lambda update-function-code --function-name a3-index-photos --zip-file fileb://deployment_package.zip
+      - cd ..
