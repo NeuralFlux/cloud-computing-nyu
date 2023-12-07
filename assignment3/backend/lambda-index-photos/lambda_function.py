@@ -38,6 +38,7 @@ def lambda_handler(event, context):
     logging.info(f"Custom Labels: {custom_labels}")
     labels.extend(custom_labels)
 
+    # TEST: CodeBuild
     return {
         'statusCode': 200,
         'body': json.dumps('Hello from Lambda!')
