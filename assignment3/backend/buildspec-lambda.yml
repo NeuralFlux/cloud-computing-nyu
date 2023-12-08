@@ -4,7 +4,11 @@ phases:
     commands:
       - echo "Zipping deployment package LF1..."
       - cd assignment3/backend/lambda-index-photos
-      - zip deployment_package.zip lambda_function.py
+      - pip install -r requirements.txt -t lib/
+      - cd lib/
+      - zip -r9 ../deployment_package.zip .
+      - cd ..
+      - zip -g deployment_package.zip lambda_function.py
       - zip -g deployment_package.zip utils.py
       - cd ..
   post_build:
