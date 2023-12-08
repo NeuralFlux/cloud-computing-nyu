@@ -1,7 +1,11 @@
+import os
 import json
 import logging
+import datetime
 
 import boto3
+
+import utils as opensearch_utils
 
 def lambda_handler(event, context):
     LABEL_DETECTION_MIN_CONFIDENCE = 0.99
@@ -38,7 +42,30 @@ def lambda_handler(event, context):
     logging.info(f"Custom Labels: {custom_labels}")
     labels.extend(custom_labels)
 
-    # TEST: CodeBuild
+    # add record to OpenSearch
+    host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
+    auth = (
+        os.environ.get("OPENSEARCH_USER_ID"),
+        os.environ.get("OPENSEARCH_PASSWD")
+    )
+
+    os_client = opensearch_utils.get_conn(host, auth)
+
+    # docs for OpenSearch Index
+    # https://opensearch.org/docs/latest/im-plugin/index/
+    INDEX_NAME = os.environ.get("OPENSEARCH_INDEX_NAME")
+
+    record = {
+        "bucket": bucket_name,
+        "objectKey": obj_key,
+        "createdTimestamp": datetime.datetime.utcnow()\
+            .isoformat(timespec="seconds") + "Z",
+        "labels": labels
+    }
+
+    os_response = opensearch_utils.add_record(os_client, INDEX_NAME, record)
+    logging.debug(f"RESP {os_response} for INSERT {record}")
+
     return {
         'statusCode': 200,
         'body': json.dumps('Hello from Lambda!')
