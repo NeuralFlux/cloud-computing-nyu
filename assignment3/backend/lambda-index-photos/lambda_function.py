@@ -8,7 +8,7 @@ import boto3
 import utils as opensearch_utils
 
 def lambda_handler(event, context):
-    LABEL_DETECTION_MIN_CONFIDENCE = 0.99
+    LABEL_DETECTION_MIN_CONFIDENCE = 99
     logging.debug(f"Event received: {event}")
 
     # extract details
