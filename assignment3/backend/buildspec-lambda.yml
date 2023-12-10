@@ -6,10 +6,16 @@ phases:
       - cd assignment3/backend/lambda-index-photos
       - zip deployment_package.zip lambda_function.py
       - zip -g deployment_package.zip utils.py
+      - cd ../lambda-search
+      - zip deployment_package.zip lambda_function.py
+      - zip -g deployment_package.zip utils.py
       - cd ..
   post_build:
     commands:
       - echo "Updating LF1..."
       - cd lambda-index-photos
       - aws lambda update-function-code --function-name a3-index-photos --zip-file fileb://deployment_package.zip
+      - echo "Updating LF2..."
+      - cd ../lambda-search
+      - aws lambda update-function-code --function-name a3-search --zip-file fileb://deployment_package.zip
       - cd ..
