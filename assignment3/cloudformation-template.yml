@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources: 
+  # NOTE: This is not recommended for production
+  # we use root roles just to focus more on CloudFormation concepts
+  # rather than the tedious templates
+  # --------------------------------- IAM --------------------------------- #
+  RootRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "codepipeline.amazonaws.com"
+                - "cloudformation.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+  RolePolicies: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "root"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: "*"
+            Resource: "*"
+      Roles: 
+        - Ref: "RootRole"
+
+  # -------------------------------- Lambda -------------------------------- #
+  LF1: 
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !Ref RootRole
+      FunctionName: "a3-index-photos"
+      Runtime: "python3.11"
+      Code: 
+        ZipFile: |
+          import os
+          import json
+          import logging
+          import datetime
+
+          import boto3
+
+          import utils as opensearch_utils
+
+          def lambda_handler(event, context):
+              LABEL_DETECTION_MIN_CONFIDENCE = 99
+              logging.debug(f"Event received: {event}")
+
+              # extract details
+              created_time = bucket_name = event['Records'][0]['eventTime']
+              bucket_name = event['Records'][0]['s3']['bucket']['name']
+              obj_key = event['Records'][0]['s3']['object']['key']
+              logging.info(f"Extracted Bucket: {bucket_name}, Key: {obj_key}")
+              
+              # call rekognition
+              rkgn_client = boto3.client('rekognition')
+              rkgn_response = rkgn_client.detect_labels(
+                  Image={
+                      "S3Object": {
+                          "Bucket": bucket_name,
+                          "Name": obj_key
+                      }
+                  },
+                  MinConfidence=LABEL_DETECTION_MIN_CONFIDENCE
+              )
+              labels = [label_group["Name"] for label_group in rkgn_response["Labels"]]
+
+              logging.debug(f"RKGN response: {rkgn_response}")
+              logging.info(f"Extracted Labels: {labels}")
+              
+              # add custom labels
+              s3 = boto3.client("s3")
+              s3_resp = s3.head_object(Bucket=bucket_name, Key=obj_key)
+              print(f"S3 Metadata Resp: {s3_resp}")
+              
+              custom_labels = s3_resp["Metadata"].get("customlabels", [])
+              print(f"Custom Labels: {custom_labels}")
+              labels.extend(custom_labels.split(','))
+
+              # add record to OpenSearch
+              host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
+              auth = (
+                  os.environ.get("OPENSEARCH_USER_ID"),
+                  os.environ.get("OPENSEARCH_PASSWD")
+              )
+
+              os_client = opensearch_utils.get_conn(host, auth)
+
+              # docs for OpenSearch Index
+              # https://opensearch.org/docs/latest/im-plugin/index/
+              INDEX_NAME = os.environ.get("OPENSEARCH_INDEX_NAME")
+
+              record = {
+                  "bucket": bucket_name,
+                  "objectKey": obj_key,
+                  "createdTimestamp": datetime.datetime.utcnow()\
+                      .isoformat(timespec="seconds") + "Z",
+                  "labels": ' '.join(labels).lower()
+              }
+
+              os_response = opensearch_utils.add_record(os_client, INDEX_NAME, record)
+              logging.debug(f"RESP {os_response} for INSERT {record}")
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from Lambda!')
+              }
+
+  
+  LF2: 
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !Ref RootRole
+      FunctionName: "a3-search"
+      Runtime: "python3.11"
+      Code: 
+        ZipFile: |
+          import os
+          import json
+          import base64
+
+          import boto3
+
+          import utils
+
+          def lambda_handler(event, context):
+              print(event["queryStringParameters"]["q"])
+
+              # get keywords from Lex
+              lex = boto3.client('lex-runtime')
+              lex_resp = lex.post_text(
+                  botName="FindKeywords",
+                  botAlias="$LATEST",
+                  userId=os.environ.get("LEX_USERID"),
+                  inputText=event["queryStringParameters"]["q"].lower()
+              )
+              assert lex_resp['ResponseMetadata']['HTTPStatusCode'] == 200
+              keywords = utils.process_lex_response(lex_resp)
+              assert len(keywords) >= 1
+              print(keywords)
+
+              # search OpenSearch
+              # query ref - https://opensearch.org/docs/latest/query-dsl/full-text/match/
+              os_query = {
+                  "query": {
+                      "match": {
+                          "labels": ' '.join(map(lambda kw: kw + '~2', keywords)),
+                          # fuzziness - dogs will still match dog
+                      }
+                  }
+              }
+              print(os_query)
+
+              host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
+              auth = (
+                  os.environ.get("OPENSEARCH_USER_ID"),
+                  os.environ.get("OPENSEARCH_PASSWD")
+              )
+
+              os_client = utils.get_conn(host, auth)
+
+              # docs for OpenSearch Index
+              # https://opensearch.org/docs/latest/im-plugin/index/
+              INDEX_NAME = os.environ.get("OPENSEARCH_INDEX_NAME")
+
+              os_resp = os_client.search(os_query, index=INDEX_NAME)
+              print(f"Hits: {len(os_resp['hits']['hits'])}")
+
+              # compile keys of matching photos
+              matching_keys = list(map(
+                  lambda record: record['_source']['objectKey'],
+                  os_resp['hits']['hits']
+              ))
+
+              photo_urls = set()
+              for key in matching_keys:
+                  photo_urls.add(f"https://a3-photos.s3.amazonaws.com/{key}")
+              
+              return {
+                  'headers': {
+                      "Access-Control-Allow-Origin" : "*", # Required for CORS support to work
+                  },
+                  'statusCode': 200,
+                  'body': json.dumps({'photo_urls': list(photo_urls)})
+              }
+
