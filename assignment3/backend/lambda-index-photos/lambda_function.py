@@ -60,7 +60,7 @@ def lambda_handler(event, context):
         "objectKey": obj_key,
         "createdTimestamp": datetime.datetime.utcnow()\
             .isoformat(timespec="seconds") + "Z",
-        "labels": labels
+        "labels": ' '.join(labels)
     }
 
     os_response = opensearch_utils.add_record(os_client, INDEX_NAME, record)
