@@ -15,7 +15,7 @@ def lambda_handler(event, context):
         botName="FindKeywords",
         botAlias="$LATEST",
         userId=os.environ.get("LEX_USERID"),
-        inputText=event["queryStringParameters"]["q"]
+        inputText=event["queryStringParameters"]["q"].lower()
     )
     assert lex_resp['ResponseMetadata']['HTTPStatusCode'] == 200
     keywords = utils.process_lex_response(lex_resp)
@@ -26,9 +26,8 @@ def lambda_handler(event, context):
     os_query = {
         "query": {
             "match": {
-                "labels": ' '.join(keywords),
-                "operator": "or",
-                "fuzzieness": "AUTO"  # dogs will still match dog
+                "labels": ' '.join(map(lambda kw: kw + '~2', keywords)),
+                # fuzziness - dogs will still match dog
             }
         }
     }

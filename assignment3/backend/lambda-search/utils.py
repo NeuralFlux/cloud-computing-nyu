@@ -4,8 +4,16 @@ from opensearchpy import OpenSearch
 def get_conn(host, auth):
     return OpenSearch(hosts=[host], http_auth=auth, use_ssl=True, verify_certs=True)
 
-def create_index(client, index_name, body):
-    return client.indices.create(index_name, body=body)
+def create_index(client, index_name):
+    index_body = {
+      'settings': {
+        'index': {
+          'number_of_shards': 2
+        }
+      }
+    }
+
+    return client.indices.create(index_name, body=index_body)
 
 def add_record(client, index_name, record):
     """
@@ -21,4 +29,5 @@ def add_record(client, index_name, record):
     return response
 
 def process_lex_response(response):
-    return list(response['slots']).remove(None)
+    keywords = set(response['slots'].values()).difference(set([None]))
+    return list(keywords)
