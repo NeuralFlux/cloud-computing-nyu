@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Photo Manager</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+
+<div class="container mt-5">
+    <div class="btn-group" role="group" aria-label="Basic example">
+        <button id="searchTab" type="button" class="btn btn-secondary">Search Photos</button>
+        <button id="uploadTab" type="button" class="btn btn-secondary">Upload Photo</button>
+    </div>
+
+    <div id="searchSection" class="mt-4">
+        <input type="text" id="searchQuery" class="form-control" placeholder="Enter search query">
+        <button id="searchBtn" class="btn btn-primary mt-2">Search</button>
+        <div id="searchResults" class="mt-3 row">
+            
+        </div>
+    </div>
+
+    <div id="uploadSection" class="mt-4" style="display:none;">
+        <input type="file" id="photoUpload" class="form-control">
+        <textarea id="photoDescription" class="form-control mt-2" placeholder="label1,label2,label3..."></textarea>
+        <button id="uploadBtn" class="btn btn-primary mt-2">Upload</button>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
