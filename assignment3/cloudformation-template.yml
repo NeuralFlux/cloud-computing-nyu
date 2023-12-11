@@ -31,6 +31,349 @@ Resources:
       Roles: 
         - Ref: "RootRole"
 
+  # -------------------------------- S3 -------------------------------- #
+  PhotoBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: "a3-photos"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: False
+        BlockPublicPolicy: False
+        IgnorePublicAcls: False
+        RestrictPublicBuckets: False
+  
+  FrontendBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: "a3-frontend-website"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: False
+        BlockPublicPolicy: False
+        IgnorePublicAcls: False
+        RestrictPublicBuckets: False
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  PublicReadBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket:
+        - !Ref PhotoBucket
+        - !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2008-10-17"
+        Statement:
+          - Action: "s3:GetObject"
+            Effect: Allow
+            Resource: !Join
+            - ''
+            - - 'arn:aws:s3:::'
+              - !Ref PhotoBucket
+              - /*
+            - ''
+            - - 'arn:aws:s3:::'
+              - !Ref FrontendBucket
+              - /*
+            Principal: '*'
+  
+  # -------------------------------- Gateway -------------------------------- #
+  Gateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: "a3-smart-album-api"
+      BinaryMediaTypes:
+        - "*"
+      Body: |
+        swagger: "2.0"
+        info:
+          description: "AI Photo Search application, built during the Cloud and Big Data course\
+            \ at New York University."
+          version: "1.0.0"
+          title: "AI Photo Search"
+        host: "70frjwcsk7.execute-api.us-east-1.amazonaws.com"
+        basePath: "/test"
+        schemes:
+        - "https"
+        paths:
+          /search:
+            get:
+              operationId: "searchPhotos"
+              produces:
+              - "application/json"
+              parameters:
+              - name: "q"
+                in: "query"
+                required: false
+                type: "string"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                type: "aws_proxy"
+                httpMethod: "POST"
+                uri: "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:489609369564:function:a3-search/invocations"
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: "when_no_match"
+            options:
+              consumes:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Expose-Headers:
+                      type: "string"
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                type: "mock"
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Expose-Headers: "'ETag'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    contentHandling: "CONVERT_TO_TEXT"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                passthroughBehavior: "when_no_match"
+          /upload:
+            put:
+              parameters:
+              - name: "key"
+                in: "query"
+                required: true
+                type: "string"
+              - name: "x-amz-meta-customLabels"
+                in: "header"
+                required: false
+                type: "string"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                "400":
+                  description: "400 response"
+                "405":
+                  description: "405 response"
+              x-amazon-apigateway-integration:
+                type: "aws"
+                credentials: "arn:aws:iam::489609369564:role/album-search-api"
+                httpMethod: "PUT"
+                uri: "arn:aws:apigateway:us-east-1:s3:path/a3-photos/{key}"
+                responses:
+                  "200":
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                requestParameters:
+                  integration.request.header.x-amz-meta-customLabels: "method.request.header.x-amz-meta-customLabels"
+                  integration.request.path.key: "method.request.querystring.key"
+                passthroughBehavior: "when_no_match"
+            options:
+              consumes:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Expose-Headers:
+                      type: "string"
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                type: "mock"
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Expose-Headers: "'ETag'"
+                      method.response.header.Access-Control-Allow-Methods: "'OPTIONS,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-amz-meta-customLabels'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    contentHandling: "CONVERT_TO_TEXT"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                passthroughBehavior: "when_no_match"
+                contentHandling: "CONVERT_TO_TEXT"
+        x-amazon-apigateway-gateway-responses:
+          DEFAULT_4XX:
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Methods: "'OPTIONS,PUT'"
+              gatewayresponse.header.Access-Control-Expose-Headers: "'ETag'"
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+              gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          DEFAULT_5XX:
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Methods: "'OPTIONS,PUT'"
+              gatewayresponse.header.Access-Control-Expose-Headers: "'ETag'"
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+              gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        x-amazon-apigateway-binary-media-types:
+        - "*/*"
+
+  # -------------------------------- Lex -------------------------------- #
+  LexChatbot:
+    Type: "AWS::Lex::Bot"
+    Properties:
+      DataPrivacy:
+        ChildDirected: False
+      IdleSessionTTLInSeconds: 60
+      Name: "a3-keyword-finder"
+      RoleArn: !GetAtt RootRole.Arn
+      BotLocales:
+        - LocaleId: "en_US"
+          NluConfidenceThreshold: 0.40
+          SlotTypes:
+            - Name: "Keywords"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: dog
+                - SampleValue:
+                    Value: cat
+                - SampleValue:
+                    Value: tree
+          Intents:
+            - Name: "FindKeyword"
+              SampleUtterances:
+                - Utterance: "show me {Keyword_One}"
+                - Utterance: "show me {Keyword_One} and {Keyword_Two}"
+              SlotPriorities:
+                - Priority: 1
+                  SlotName: Keyword_One
+                - Priority: 2
+                  SlotName: Keyword_Two
+              Slots:
+                - Name: "Keyword_One"
+                  SlotTypeName: "Keywords"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "What type of flowers would you like to order?"
+                      MaxRetries: 3
+                      AllowInterrupt: false
+                - Name: "Keyword_Two"
+                  SlotTypeName: "Keywords"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Optional"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "What type of flowers would you like to order?"
+                      MaxRetries: 3
+                      AllowInterrupt: false
+            - Name: "FallbackIntent"
+              Description: "Default intent when no other intent matches"
+              ParentIntentSignature: "AMAZON.FallbackIntent"
+  
+  # -------------------------------- Opensearch -------------------------------- #
+  OpensearchDB:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: "a3-photos"
+      ClusterConfig:
+        InstanceCount: 1
+        InstanceType: "t3.small.search"
+        MultiAZWithStandbyEnabled: False
+        ZoneAwarenessEnabled: False
+      EBSOptions:
+          EBSEnabled: True
+          VolumeSize: 10
+          VolumeType: "gp3"
+  
+  # -------------------------------- CodePipeline -------------------------------- #
+  A3Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !GetAtt RootRole.Arn
+            Stages:
+              - Name: Source
+                Actions:
+                  - Name: AppSource
+                    InputArtifacts: []
+                    ActionTypeId:
+                      Category: Source
+                      Owner: AWS
+                      Version: '1'
+                      Provider: CodeStarSourceConnection
+                    OutputArtifacts:
+                      - Name: SourceOutput
+                    Configuration:
+                      BranchName: main
+                      ConnectionArn: >-
+                        arn:aws:codestar-connections:us-east-1:489609369564:connection/603c8448-d98e-4dab-9eaf-03edf2e3d287
+                      FullRepositoryId: NeuralFlux/cloud-computing-nyu
+                    RunOrder: 1
+              - Name: Build
+                Actions:
+                  - Name: Build
+                    InputArtifacts:
+                      - Name: SourceOutput
+                    ActionTypeId:
+                      Category: Build
+                      Owner: AWS
+                      Provider: CodeBuild
+                      Version: '1'
+                    Configuration:
+                      ProjectName: a3-lambda-builder
+                    RunOrder: 1
+                  - Name: BuildFrontend
+                    InputArtifacts:
+                      - Name: SourceOutput
+                    OutputArtifacts:
+                      - Name: frontendOutput
+                    ActionTypeId:
+                      Category: Build
+                      Owner: AWS
+                      Provider: CodeBuild
+                      Version: '1'
+                    Configuration:
+                      ProjectName: a3-frontend-builder
+                    RunOrder: 2
+                - Name: Deploy
+                  Actions:
+                    - Name: DeployFrontend
+                      InputArtifacts:
+                        - Name: frontendOutput
+                      ActionTypeId:
+                        Category: Build
+                        Owner: AWS
+                        Provider: S3
+                        Version: '1'
+                      RunOrder: 1
+            Triggers:
+              - ProviderType: CodeStarSourceConnection
+                GitConfiguration:
+                  Push:
+                    - Tags:
+                        Includes:
+                          - release*
+                          - prod*
+                  SourceActionName: AppSource
+
   # -------------------------------- Lambda -------------------------------- #
   LF1: 
     Type: AWS::Lambda::Function
@@ -190,4 +533,3 @@ Resources:
                   'statusCode': 200,
                   'body': json.dumps({'photo_urls': list(photo_urls)})
               }
-
