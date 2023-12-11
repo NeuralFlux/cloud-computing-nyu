@@ -4,32 +4,47 @@ import base64
 
 import boto3
 
-import utils as opensearch_utils
+import utils
 
 def lambda_handler(event, context):
     print(event["queryStringParameters"]["q"])
-    query = {
+
+    # get keywords from Lex
+    lex = boto3.client('lex-runtime')
+    lex_resp = lex.post_text(
+        botName="FindKeywords",
+        botAlias="$LATEST",
+        userId=os.environ.get("LEX_USERID"),
+        inputText=event["queryStringParameters"]["q"]
+    )
+    assert lex_resp['ResponseMetadata']['HTTPStatusCode'] == 200
+    keywords = utils.process_lex_response(lex_resp)
+    assert len(keywords) >= 1
+
+    # search OpenSearch
+    # query ref - https://opensearch.org/docs/latest/query-dsl/full-text/match/
+    os_query = {
         "query": {
             "match": {
-                "labels": event["queryStringParameters"]["q"]
+                "labels": ' '.join(keywords),
+                "operator": "or"
             }
         }
     }
 
-    # search OpenSearch
     host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
     auth = (
         os.environ.get("OPENSEARCH_USER_ID"),
         os.environ.get("OPENSEARCH_PASSWD")
     )
 
-    os_client = opensearch_utils.get_conn(host, auth)
+    os_client = utils.get_conn(host, auth)
 
     # docs for OpenSearch Index
     # https://opensearch.org/docs/latest/im-plugin/index/
     INDEX_NAME = os.environ.get("OPENSEARCH_INDEX_NAME")
 
-    os_resp = os_client.search(query, index=INDEX_NAME)
+    os_resp = os_client.search(os_query, index=INDEX_NAME)
 
     # compile keys of matching photos
     matching_keys = list(map(
@@ -37,21 +52,14 @@ def lambda_handler(event, context):
         os_resp['hits']['hits']
     ))
 
-    # fetch objects from S3
-    s3 = boto3.client("s3")
-    photo_objects = []
-
+    response = {'photo_urls': []}
     for key in matching_keys:
-        resp = s3.get_object(Bucket="a3-photos", Key=key)
-        photo_bytes = resp["Body"].read()
-        encoded_bytes = base64.b64encode(photo_bytes)
-        photo_objects.append(encoded_bytes.decode())
+        response['photo_urls'].append(f"https://a3-photos.s3.amazonaws.com/{key}")
     
     return {
         'headers': {
             "Access-Control-Allow-Origin" : "*", # Required for CORS support to work
-            "Content-Type": "image/png"
         },
         'statusCode': 200,
-        'body': json.dumps(photo_objects)
+        'body': json.dumps(response)
     }

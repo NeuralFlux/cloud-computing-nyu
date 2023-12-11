@@ -19,3 +19,6 @@ def add_record(client, index_name, record):
     )
     
     return response
+
+def process_lex_response(response):
+    return list(response['slots']).remove(None)
