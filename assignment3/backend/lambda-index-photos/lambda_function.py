@@ -36,11 +36,11 @@ def lambda_handler(event, context):
     # add custom labels
     s3 = boto3.client("s3")
     s3_resp = s3.head_object(Bucket=bucket_name, Key=obj_key)
-    logging.debug(f"S3 Metadata Resp: {s3_resp}")
+    print(f"S3 Metadata Resp: {s3_resp}")
     
-    custom_labels = s3_resp["Metadata"].get("x-amz-meta-customLabels", [])
-    logging.info(f"Custom Labels: {custom_labels}")
-    labels.extend(custom_labels)
+    custom_labels = s3_resp["Metadata"].get("customlabels", [])
+    print(f"Custom Labels: {custom_labels}")
+    labels.extend(custom_labels.split(','))
 
     # add record to OpenSearch
     host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")

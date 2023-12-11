@@ -20,6 +20,7 @@ def lambda_handler(event, context):
     assert lex_resp['ResponseMetadata']['HTTPStatusCode'] == 200
     keywords = utils.process_lex_response(lex_resp)
     assert len(keywords) >= 1
+    print(keywords)
 
     # search OpenSearch
     # query ref - https://opensearch.org/docs/latest/query-dsl/full-text/match/
@@ -31,6 +32,7 @@ def lambda_handler(event, context):
             }
         }
     }
+    print(os_query)
 
     host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
     auth = (
@@ -45,6 +47,7 @@ def lambda_handler(event, context):
     INDEX_NAME = os.environ.get("OPENSEARCH_INDEX_NAME")
 
     os_resp = os_client.search(os_query, index=INDEX_NAME)
+    print(f"Hits: {len(os_resp['hits']['hits'])}")
 
     # compile keys of matching photos
     matching_keys = list(map(
@@ -52,14 +55,14 @@ def lambda_handler(event, context):
         os_resp['hits']['hits']
     ))
 
-    response = {'photo_urls': []}
+    photo_urls = set()
     for key in matching_keys:
-        response['photo_urls'].append(f"https://a3-photos.s3.amazonaws.com/{key}")
+        photo_urls.add(f"https://a3-photos.s3.amazonaws.com/{key}")
     
     return {
         'headers': {
             "Access-Control-Allow-Origin" : "*", # Required for CORS support to work
         },
         'statusCode': 200,
-        'body': json.dumps(response)
+        'body': json.dumps({'photo_urls': list(photo_urls)})
     }
