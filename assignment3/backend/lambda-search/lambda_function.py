@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 
 import boto3
@@ -6,10 +7,11 @@ import boto3
 import utils as opensearch_utils
 
 def lambda_handler(event, context):
+    print(event["queryStringParameters"]["q"])
     query = {
         "query": {
             "match": {
-                "labels": "<TEST>"
+                "labels": event["queryStringParameters"]["q"]
             }
         }
     }
@@ -31,7 +33,7 @@ def lambda_handler(event, context):
 
     # compile keys of matching photos
     matching_keys = list(map(
-        lambda record: record['key'],
+        lambda record: record['_source']['objectKey'],
         os_resp['hits']['hits']
     ))
 
@@ -51,6 +53,5 @@ def lambda_handler(event, context):
             "Content-Type": "image/png"
         },
         'statusCode': 200,
-        'body': photo_objects,
-        'isBase64Encoded': True
+        'body': json.dumps(photo_objects)
     }
