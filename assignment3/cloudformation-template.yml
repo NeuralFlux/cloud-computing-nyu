@@ -289,7 +289,7 @@ Resources:
               Description: "Default intent when no other intent matches"
               ParentIntentSignature: "AMAZON.FallbackIntent"
   
-  # -------------------------------- Opensearch -------------------------------- #
+  # # -------------------------------- Opensearch -------------------------------- #
   OpensearchDB:
     Type: AWS::OpenSearchService::Domain
     Properties:
@@ -309,70 +309,70 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       RoleArn: !GetAtt RootRole.Arn
-            Stages:
-              - Name: Source
-                Actions:
-                  - Name: AppSource
-                    InputArtifacts: []
-                    ActionTypeId:
-                      Category: Source
-                      Owner: AWS
-                      Version: '1'
-                      Provider: CodeStarSourceConnection
-                    OutputArtifacts:
-                      - Name: SourceOutput
-                    Configuration:
-                      BranchName: main
-                      ConnectionArn: >-
-                        arn:aws:codestar-connections:us-east-1:489609369564:connection/603c8448-d98e-4dab-9eaf-03edf2e3d287
-                      FullRepositoryId: NeuralFlux/cloud-computing-nyu
-                    RunOrder: 1
-              - Name: Build
-                Actions:
-                  - Name: Build
-                    InputArtifacts:
-                      - Name: SourceOutput
-                    ActionTypeId:
-                      Category: Build
-                      Owner: AWS
-                      Provider: CodeBuild
-                      Version: '1'
-                    Configuration:
-                      ProjectName: a3-lambda-builder
-                    RunOrder: 1
-                  - Name: BuildFrontend
-                    InputArtifacts:
-                      - Name: SourceOutput
-                    OutputArtifacts:
-                      - Name: frontendOutput
-                    ActionTypeId:
-                      Category: Build
-                      Owner: AWS
-                      Provider: CodeBuild
-                      Version: '1'
-                    Configuration:
-                      ProjectName: a3-frontend-builder
-                    RunOrder: 2
-                - Name: Deploy
-                  Actions:
-                    - Name: DeployFrontend
-                      InputArtifacts:
-                        - Name: frontendOutput
-                      ActionTypeId:
-                        Category: Build
-                        Owner: AWS
-                        Provider: S3
-                        Version: '1'
-                      RunOrder: 1
-            Triggers:
-              - ProviderType: CodeStarSourceConnection
-                GitConfiguration:
-                  Push:
-                    - Tags:
-                        Includes:
-                          - release*
-                          - prod*
-                  SourceActionName: AppSource
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: AppSource
+              InputArtifacts: []
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: '1'
+                Provider: CodeStarSourceConnection
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                BranchName: main
+                ConnectionArn: >-
+                  arn:aws:codestar-connections:us-east-1:489609369564:connection/603c8448-d98e-4dab-9eaf-03edf2e3d287
+                FullRepositoryId: NeuralFlux/cloud-computing-nyu
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: a3-lambda-builder
+              RunOrder: 1
+            - Name: BuildFrontend
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: frontendOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: a3-frontend-builder
+              RunOrder: 2
+        - Name: Deploy
+          Actions:
+            - Name: DeployFrontend
+              InputArtifacts:
+                - Name: frontendOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              RunOrder: 1
+      Triggers:
+        - ProviderType: CodeStarSourceConnection
+          GitConfiguration:
+            Push:
+              - Tags:
+                  Includes:
+                    - release*
+                    - prod*
+            SourceActionName: AppSource
 
   # -------------------------------- Lambda -------------------------------- #
   LF1: 
